@@ -1,6 +1,6 @@
 use std::cmp;
 use std::sync::Arc;
-
+use std::time::Duration;
 use serde::Deserialize;
 
 use crate::{cache, config, source, Error, Result};
@@ -13,9 +13,36 @@ pub async fn load<'a>(
     filter: Filter,
     transform: &config::Transform,
 ) -> Result<cache::Reference> {
-    let latest_artifact = get_latest_artifact(client, owner, repository, filter).await?;
+    let mut wait_duration = Duration::from_secs(1);
+    let mut remaining_tries = 10;
 
-    if let Some((id, url, name)) = latest_artifact {
+    let latest_artifact = loop {
+        let latest_artifact = get_latest_artifact(client, owner, repository, &filter).await?;
+        // HACKFIX: GitHub sometimes returns stale results, seems like our only option is to try to detect it and retry
+        // It still means we might miss new builds, but at least we won't go *backwards*
+        // See: https://github.com/orgs/community/discussions/206725
+        if let Some(new_artifact) = &latest_artifact {
+            if remaining_tries == 0 {
+                eprintln!("Too many retries, using artifact with id {}", new_artifact.id);
+                break latest_artifact;
+            }
+            if let cache::Token::ArtifactId(old_id) = cache.current_token() {
+                // Stupid fix is stupid - assumes these increase monotonically
+                if new_artifact.id < *old_id {
+                    eprintln!("Got older artifact from GitHub, trying again in {}s", wait_duration.as_secs());
+                    tokio::time::sleep(wait_duration).await;
+                    wait_duration = (wait_duration * 2).min(Duration::from_secs(30));
+                    remaining_tries -= 1;
+                    continue;
+                }
+            }
+            break latest_artifact;
+        } else {
+            break None
+        }
+    };
+
+    if let Some(LatestArtifact { id, url, name }) = latest_artifact {
         use cache::UpdateResult::*;
         match cache.try_update(cache::Token::ArtifactId(id)) {
             Mismatch(updater) => {
@@ -42,8 +69,8 @@ async fn get_latest_artifact(
     client: &Client,
     owner: &str,
     repository: &str,
-    filter: Filter,
-) -> Result<Option<(usize, String, String)>> {
+    filter: &Filter,
+) -> Result<Option<LatestArtifact>> {
     // TODO: we're not handling pagination, which means we rely on results being ordered by newest!
 
     let mut workflow_runs = client
@@ -80,12 +107,22 @@ async fn get_latest_artifact(
             }
 
             if let Some(url) = artifact.archive_download_url {
-                return Ok(Some((artifact.id, url, artifact.name)));
+                return Ok(Some(LatestArtifact {
+                    id: artifact.id,
+                    url,
+                    name: artifact.name,
+                }));
             }
         }
     }
 
     Ok(None)
+}
+
+struct LatestArtifact {
+    id: usize,
+    url: String,
+    name: String,
 }
 
 #[derive(Clone, Debug)]

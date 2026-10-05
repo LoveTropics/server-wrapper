@@ -163,6 +163,10 @@ pub struct Entry<'a> {
 }
 
 impl<'a> Entry<'a> {
+    pub fn current_token(&self) -> &Token {
+        &self.current_token
+    }
+
     pub fn try_update(self, token: Token) -> UpdateResult<'a> {
         if self.current_token != token {
             println!(
