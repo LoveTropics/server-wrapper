@@ -26,6 +26,8 @@ pub struct Config {
     pub restart: bool,
     #[serde(default = "default_fallback_to_cache")]
     pub fallback_to_cache: bool,
+    #[serde(default = "Default::default")]
+    pub mavens: Vec<MavenRepository>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -47,6 +49,12 @@ pub enum Trigger {
     Webhook { port: u16 },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MavenRepository {
+    pub id: String,
+    pub url: String,
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {
@@ -60,7 +68,8 @@ impl Default for Config {
             },
             min_restart_interval_seconds: default_min_restart_interval(),
             restart: default_restart(),
-            fallback_to_cache: default_fallback_to_cache()
+            fallback_to_cache: default_fallback_to_cache(),
+            mavens: Vec::default(),
         }
     }
 }
@@ -83,7 +92,7 @@ where
     T: Serialize + DeserializeOwned + Default,
 {
     let path = path.as_ref();
-    let mut config = if path.exists() {
+    let config = if path.exists() {
         read_config(path).await.expect("failed to read config")
     } else {
         let config = T::default();

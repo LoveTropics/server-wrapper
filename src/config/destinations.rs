@@ -148,6 +148,9 @@ pub enum Source {
         game_version: Option<String>,
         loader: Option<String>,
     },
+    Maven {
+        maven: String,
+    },
     Url {
         url: String,
     },

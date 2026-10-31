@@ -1,4 +1,5 @@
-use crate::{cache, config, source, Error, Result};
+use crate::{cache, config, source};
+use anyhow::{anyhow, Result};
 
 pub async fn load<'a>(
     client: &reqwest::Client,
@@ -30,14 +31,14 @@ pub async fn load<'a>(
             if let Some(file) = transform.apply(file).await? {
                 Ok(updater.update(file).await?)
             } else {
-                Err(Error::MissingArtifact)
+                Err(anyhow!("Missing artifact"))
             }
         }
         Match(reference) => Ok(reference),
     }
 }
 
-fn file_name(url: &str) -> &str {
+pub(crate) fn file_name(url: &str) -> &str {
     match url.rsplit_once("/") {
         Some((_, name)) => name,
         None => url,

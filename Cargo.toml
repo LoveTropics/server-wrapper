@@ -24,4 +24,6 @@ zip = "2.4"
 glob = "0.3"
 sha1 = "0.10"
 
-thiserror = "1.0"
+anyhow = "1.0.104"
+
+ristretto_resolver = "0.34.0"

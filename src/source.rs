@@ -1,6 +1,6 @@
+use anyhow::{anyhow, Result};
 use bytes::Bytes;
 
-use crate::{Error, Result};
 use crate::cache;
 use crate::config::{self, Source};
 use crate::Context;
@@ -9,6 +9,7 @@ pub mod github;
 pub mod http;
 pub mod modrinth;
 pub mod path;
+pub mod maven;
 
 pub async fn load<'a>(
     ctx: &Context,
@@ -32,13 +33,14 @@ pub async fn load<'a>(
 
                 github::load(&ctx.github, cache, owner, repository, filter, transform).await
             }
-            _ => Err(Error::MalformedGitHubReference(github.clone())),
+            _ => Err(anyhow!("Malformed GitHub artifacts {}", github)),
         },
         Source::Modrinth {
             project_id,
             game_version,
             loader,
         } => modrinth::load(&ctx.modrinth, cache, project_id, game_version, loader, transform).await,
+        Source::Maven { maven } => maven::load(&ctx.client, &ctx.maven_resolver, cache, maven, transform).await,
         Source::Url { url } => http::load(&ctx.client, cache, url, transform).await,
         Source::Path { path } => path::load(cache, path, transform).await,
     }

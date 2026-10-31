@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
-
+use ristretto_resolver::ArtifactCoordinate;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
@@ -54,7 +54,7 @@ impl Loader {
         Ok(Loader { root, old_entries, entries, used_entries: HashSet::new() })
     }
 
-    pub fn entry<K: Into<String>>(&mut self, key: K) -> Entry {
+    pub fn entry<K: Into<String>>(&mut self, key: K) -> Entry<'_> {
         let key = key.into();
         let current_token = self
             .entries
@@ -250,6 +250,8 @@ pub enum Token {
     Sha1([u8; 20]),
     #[serde(rename = "sha512")]
     Sha512(String),
+    #[serde(rename = "maven")]
+    Maven { coordinate: ArtifactCoordinate, file: String },
     #[serde(rename = "unknown")]
     Unknown,
 }
@@ -262,6 +264,10 @@ impl PartialEq for Token {
             (ArtifactId(left), ArtifactId(right)) => left == right,
             (Sha1(left), Sha1(right)) => left == right,
             (Sha512(left), Sha512(right)) => left == right,
+            (
+                Maven { coordinate: left_coord, file: left_file },
+                Maven { coordinate: right_coord, file: right_file }
+            ) => left_coord == right_coord && left_file == right_file,
             (_, _) => false,
         }
     }

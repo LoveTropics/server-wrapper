@@ -1,9 +1,10 @@
+use anyhow::{anyhow, Result};
+use serde::Deserialize;
 use std::cmp;
 use std::sync::Arc;
 use std::time::Duration;
-use serde::Deserialize;
 
-use crate::{cache, config, source, Error, Result};
+use crate::{cache, config, source};
 
 pub async fn load<'a>(
     client: &Client,
@@ -55,13 +56,13 @@ pub async fn load<'a>(
                 if let Some(file) = transform.apply(file).await? {
                     Ok(updater.update(file).await?)
                 } else {
-                    Err(Error::MissingArtifact)
+                    Err(anyhow!("Missing artifact"))
                 }
             }
             Match(reference) => Ok(reference),
         }
     } else {
-        cache.get_existing().ok_or(Error::MissingArtifact)
+        cache.get_existing().ok_or(anyhow!("Missing artifact"))
     }
 }
 

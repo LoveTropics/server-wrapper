@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
+use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use sha1::{Digest, Sha1};
 use tokio::fs;
 
-use crate::{cache, config, source, Error, Result};
+use crate::{cache, config, source};
 
 pub async fn load<'a>(
     cache: cache::Entry<'a>,
@@ -35,7 +36,7 @@ pub async fn load<'a>(
             if let Some(file) = transform.apply(file).await? {
                 Ok(updater.update(file).await?)
             } else {
-                Err(Error::MissingArtifact)
+                Err(anyhow!("Missing artifact"))
             }
         }
         Match(reference) => Ok(reference),

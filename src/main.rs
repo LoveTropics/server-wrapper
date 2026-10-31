@@ -1,9 +1,11 @@
+use anyhow::Result;
 use std::collections::HashMap;
-use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::FutureExt;
+use ristretto_resolver::{FileCache, RemoteRepository, RepositoryPolicy};
 use tokio::fs;
 
 pub use config::Config;
@@ -25,6 +27,7 @@ pub struct Context {
     pub github: source::github::Client,
     pub modrinth: source::modrinth::Client,
     pub client: reqwest::Client,
+    pub maven_resolver: Arc<ristretto_resolver::Resolver>,
     pub status: StatusWriter,
 }
 
@@ -61,12 +64,28 @@ pub async fn main() {
             .user_agent("server-wrapper (https://github.com/NucleoidMC/server-wrapper)")
             .build()
             .unwrap();
+
+        let mut maven = ristretto_resolver::ResolverBuilder::new()
+            .file_cache(FileCache::new(PathBuf::from(CACHE_ROOT).join("maven")));
+
+        for repository in config.mavens {
+            maven = maven.repository(RemoteRepository {
+                id: repository.id,
+                url: repository.url,
+                releases: RepositoryPolicy::enabled(),
+                snapshots: RepositoryPolicy::enabled(),
+                authentication: None,
+                proxy: None,
+            });
+        }
+
         let github = source::github::Client::new(config.tokens.github.clone());
         let modrinth = source::modrinth::Client::new(client.clone());
         let ctx = Context {
             github,
             modrinth,
             client,
+            maven_resolver: Arc::new(maven.build().unwrap()),
             status,
         };
 
@@ -153,7 +172,7 @@ pub async fn main() {
 async fn prepare_destinations(
     ctx: &Context,
     destinations: HashMap<String, config::Destination>,
-    fallback_to_cache: bool
+    fallback_to_cache: bool,
 ) -> Vec<PreparedDestination> {
     let mut futures = Vec::new();
 
@@ -178,8 +197,7 @@ async fn prepare_destination(
     ctx: &Context,
     destination_name: &str,
     destination: &config::Destination,
-    fallback_to_cache: bool
-
+    fallback_to_cache: bool,
 ) -> Result<PreparedDestination> {
     let cache_root = Path::new(CACHE_ROOT).join(destination_name);
 
@@ -193,20 +211,27 @@ async fn prepare_destination(
             match source::load(ctx, cache_entry, source, &source_set.transform).await {
                 Ok(reference) => cache_files.push((key.clone(), reference)),
                 Err(err) => {
-                    match if fallback_to_cache { cache.entry(key.clone()).get_existing() } else { None } {
+                    match if fallback_to_cache {
+                        cache.entry(key.clone()).get_existing()
+                    } else {
+                        None
+                    } {
                         Some(reference) => {
-                            eprintln!("failed to load {}: {:?}! Loading from cache.", key, err);
+                            eprintln!(
+                                "failed to load {}: {}! Loading from cache.",
+                                key,
+                                err.root_cause()
+                            );
                             ctx.status
                                 .write(format!("Failed to load {}... Loading from cache!", key));
                             cache_files.push((key.clone(), reference))
                         }
                         None => {
-                            eprintln!("failed to load {}: {:?}! excluding.", key, err);
+                            eprintln!("failed to load {}: {}! excluding.", key, err.root_cause());
                             ctx.status
                                 .write(format!("Failed to load {}... Excluding!", key));
                         }
                     }
-                    
                 }
             }
         }
@@ -243,20 +268,4 @@ impl PreparedDestination {
 
         Ok(())
     }
-}
-
-pub type Result<T> = std::result::Result<T, Error>;
-
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("io error")]
-    Io(#[from] io::Error),
-    #[error("zip error")]
-    Zip(#[from] zip::result::ZipError),
-    #[error("http error")]
-    Reqwest(#[from] reqwest::Error),
-    #[error("malformed github reference")]
-    MalformedGitHubReference(String),
-    #[error("missing artifact")]
-    MissingArtifact,
 }
