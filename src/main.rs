@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::FutureExt;
-use ristretto_resolver::{FileCache, RemoteRepository, RepositoryPolicy};
+use ristretto_resolver::{FileCache, RemoteRepository, RepositoryPolicy, UpdatePolicy};
 use tokio::fs;
 
 pub use config::Config;
@@ -68,12 +68,17 @@ pub async fn main() {
         let mut maven = ristretto_resolver::ResolverBuilder::new()
             .file_cache(FileCache::new(PathBuf::from(CACHE_ROOT).join("maven")));
 
+        let repository_policy = RepositoryPolicy {
+            enabled: true,
+            update: UpdatePolicy::Always,
+            checksum: Default::default(),
+        };
         for repository in config.mavens {
             maven = maven.repository(RemoteRepository {
                 id: repository.id,
                 url: repository.url,
-                releases: RepositoryPolicy::enabled(),
-                snapshots: RepositoryPolicy::enabled(),
+                releases: repository_policy,
+                snapshots: repository_policy,
                 authentication: None,
                 proxy: None,
             });
