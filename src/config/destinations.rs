@@ -72,8 +72,9 @@ mod transform {
 
             let jar_names: Vec<String> = zip
                 .file_names()
+                .filter_map(|entry| entry.ok())
                 .filter(|path| matches_all(path, &patterns))
-                .map(|path| path.to_owned())
+                .map(|path| path.to_string())
                 .collect();
 
             for name in jar_names {

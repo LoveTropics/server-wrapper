@@ -6,10 +6,11 @@ edition = "2021"
 
 [profile.release]
 strip = "symbols"
+lto = true
 
 [dependencies]
-tokio = { version = "1.53", features = ["full"] }
-reqwest = { version = "0.12", features = ["rustls-tls", "stream", "gzip", "json"], default-features = false }
+tokio = { version = "1.54", features = ["full"] }
+reqwest = { version = "0.13", features = ["rustls", "stream", "gzip", "json"], default-features = false }
 futures = "0.3"
 
 bytes = "1.12"
@@ -18,12 +19,11 @@ chrono = { version = "0.4", features = ["serde"] }
 
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "0.5"
+toml = "1.1"
 
-zip = "2.4"
+zip = "9.2.0"
 glob = "0.3"
-sha1 = "0.10"
+sha1 = "0.11"
 
-anyhow = "1.0.104"
-
-ristretto_resolver = "0.34.0"
+anyhow = "1.0"
+ristretto_resolver = "0.34"
